@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  overflow-x: hidden;
+  background-color: #FFFFFF;
+  color: #1F2937;
+}
+::selection { background-color: #F59E0B; color: #000000; }
+.font-signature { font-family: var(--font-dancing), cursive; }
+.font-mono-code { font-family: var(--font-fira), monospace; }
+
+@keyframes floatSlow { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
+@keyframes floatReverse { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(8px); } }
+@keyframes pulseGlow { 0%, 100% { opacity: 0.35; transform: scale(1); } 50% { opacity: 0.65; transform: scale(1.04); } }
+@keyframes mouseScroll { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(8px); opacity: 0; } }
+
+.animate-float { animation: floatSlow 5s ease-in-out infinite; }
+.animate-float-reverse { animation: floatReverse 6s ease-in-out infinite; }
+.animate-halo { animation: pulseGlow 6s ease-in-out infinite; }
+.mouse-wheel-dot { animation: mouseScroll 1.8s infinite; }
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+.toast-in {
+  animation: toastIn 0.4s ease;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
 }
