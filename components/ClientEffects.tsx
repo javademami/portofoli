@@ -120,7 +120,7 @@ export default function ClientEffects() {
 
     // 2. Scroll Progress Widget & Audio Chime
     const widget = document.getElementById("scroll-widget");
-    const circle = document.getElementById("scroll-progress-circle") as SVGCircleElement;
+   const circle = document.getElementById("scroll-progress-circle") as unknown as SVGCircleElement | null;
     const text = document.getElementById("scroll-percent-text");
     const totalCircumference = 2 * Math.PI * 20;
 
