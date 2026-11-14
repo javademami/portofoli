@@ -1,12 +1,10 @@
 "use client";
 
 import ClientEffects from "@/components/ClientEffects";
+import { useLang } from "@/components/site/LanguageContext";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
-type Lang = "en" | "sv";
 type ProjectKey = "livana" | "brandify" | "apex";
-
-const YEAR = 2026;
 
 const PROJECT_META: { key: ProjectKey; name: string; url: string; image: string; tags: string[] }[] = [
   { key: "livana", name: "Livana", url: "https://livana.vercel.app/", image: "/livana.png", tags: ["Next.js", "MongoDB", "Leaflet"] },
@@ -32,8 +30,6 @@ const SKILLS = [
 
 const T = {
   en: {
-    nav: { home: "Home", about: "About", skills: "Skills", projects: "Portfolio", experience: "Experience", contact: "Contact" },
-    letsTalk: "Let's Talk",
     hero: {
       hello: "Hello, I'm",
       first: "Javad",
@@ -148,11 +144,8 @@ const T = {
       success: "Thanks! Your message has been sent.",
       error: "Something went wrong. Please try again.",
     },
-    footer: { rights: "All rights reserved." },
   },
   sv: {
-    nav: { home: "Hem", about: "Om mig", skills: "Kompetenser", projects: "Portfölj", experience: "Erfarenhet", contact: "Kontakt" },
-    letsTalk: "Hör av dig",
     hero: {
       hello: "Hej, jag är",
       first: "Javad",
@@ -267,7 +260,6 @@ const T = {
       success: "Tack! Ditt meddelande har skickats.",
       error: "Något gick fel. Försök igen.",
     },
-    footer: { rights: "Alla rättigheter förbehållna." },
   },
 };
 
@@ -302,14 +294,13 @@ function Reveal({ children, delay = 0, className = "" }: { children: ReactNode; 
 }
 
 export default function Home() {
-  const [lang, setLang] = useState<Lang>("en");
+  const { lang } = useLang();
   const [selected, setSelected] = useState<number | null>(null);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
-  const barRef = useRef<HTMLDivElement>(null);
   const photoRef = useRef<HTMLDivElement>(null);
   const reviewTrackRef = useRef<HTMLDivElement>(null);
 
@@ -317,27 +308,11 @@ export default function Home() {
   const cvHref = lang === "en" ? "/v8e.pdf" : "/v8.pdf";
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("lang");
-      if (saved === "en" || saved === "sv") setLang(saved);
-    } catch {}
-  }, []);
-
-  const changeLang = (l: Lang) => {
-    setLang(l);
-    try {
-      localStorage.setItem("lang", l);
-    } catch {}
-  };
-
-  useEffect(() => {
     let frame = 0;
     const onScroll = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const y = window.scrollY;
-        const max = document.documentElement.scrollHeight - window.innerHeight || 1;
-        if (barRef.current) barRef.current.style.transform = `scaleX(${y / max})`;
         if (photoRef.current) photoRef.current.style.transform = `translate3d(0, ${Math.min(y, 800) * -0.06}px, 0)`;
       });
     };
@@ -405,44 +380,6 @@ export default function Home() {
 
   return (
     <>
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#0B0D13]/90 backdrop-blur-md border-b border-white/5" id="navbar">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <a aria-label="Javad Emami Home" className="flex items-center gap-3 group focus:outline-none" href="#hero">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 via-amber-500/10 to-transparent border border-amber-500/30 flex items-center justify-center font-bold text-amber-400 tracking-tighter text-lg shadow-[0_0_15px_rgba(245,158,11,0.2)] group-hover:border-amber-400 transition-all">
-              JE
-            </div>
-          </a>
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-            <a className="text-zinc-400 hover:text-white transition-colors" href="#hero">{t.nav.home}</a>
-            <a className="text-zinc-400 hover:text-white transition-colors" href="#about">{t.nav.about}</a>
-            <a className="text-zinc-400 hover:text-white transition-colors" href="#skills">{t.nav.skills}</a>
-            <a className="text-zinc-400 hover:text-white transition-colors" href="#projects">{t.nav.projects}</a>
-            <a className="text-zinc-400 hover:text-white transition-colors" href="#experience">{t.nav.experience}</a>
-            <a className="text-zinc-400 hover:text-white transition-colors" href="#contact">{t.nav.contact}</a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center rounded-full border border-white/15 p-0.5 text-[11px] font-bold">
-              {(["en", "sv"] as Lang[]).map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  onClick={() => changeLang(l)}
-                  aria-pressed={lang === l}
-                  className={`px-3 py-1 rounded-full transition-all ${lang === l ? "bg-amber-500 text-black" : "text-zinc-400 hover:text-white"}`}
-                >
-                  {l.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <a className="hidden sm:inline-flex items-center justify-center px-5 py-2.5 rounded-full text-xs font-semibold tracking-wide text-amber-400 border border-amber-500/40 hover:bg-amber-500/10 transition-all duration-300 hover:scale-105 active:scale-95" href="#contact">
-              {t.letsTalk}
-            </a>
-          </div>
-        </div>
-        <div ref={barRef} className="absolute bottom-0 left-0 h-[2px] w-full origin-left scale-x-0 bg-amber-400" />
-      </header>
-
       {/* Hero */}
       <section className="relative min-h-screen bg-[#0B0D13] text-white pt-28 pb-16 flex flex-col justify-between overflow-hidden" id="hero">
         <canvas className="absolute inset-0 z-0 pointer-events-auto" id="particles-canvas"></canvas>
@@ -576,7 +513,7 @@ export default function Home() {
       </section>
 
       {/* Skills */}
-      <section className="py-20 bg-zinc-50/50 border-y border-zinc-100" id="skills">
+      <section className="py-20 bg-zinc-50 border-y border-zinc-100" id="skills">
         <div className="max-w-7xl mx-auto px-6">
           <Reveal>
             <div className="mb-12">
@@ -642,7 +579,7 @@ export default function Home() {
       </section>
 
       {/* Experience and reviews */}
-      <section className="py-24 bg-zinc-50/50 border-t border-zinc-100" id="experience">
+      <section className="py-24 bg-zinc-50 border-t border-zinc-100" id="experience">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
             <div className="lg:col-span-6 space-y-6">
@@ -752,24 +689,6 @@ export default function Home() {
           </Reveal>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="bg-[#0B0D13] text-zinc-400 py-10 border-t border-zinc-800">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6 text-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center font-bold text-amber-400 text-xs">JE</div>
-            <span>© {YEAR} Javad Emami. {t.footer.rights}</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-6">
-            <a className="hover:text-white transition-colors" href="#hero">{t.nav.home}</a>
-            <a className="hover:text-white transition-colors" href="#about">{t.nav.about}</a>
-            <a className="hover:text-white transition-colors" href="#skills">{t.nav.skills}</a>
-            <a className="hover:text-white transition-colors" href="#projects">{t.nav.projects}</a>
-            <a className="hover:text-white transition-colors" href="#experience">{t.nav.experience}</a>
-            <a className="hover:text-white transition-colors" href="#contact">{t.nav.contact}</a>
-          </div>
-        </div>
-      </footer>
 
       {/* Project modal (dark, image left, details right) */}
       {project && projectText && (

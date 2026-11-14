@@ -14,7 +14,7 @@ export default function ParticleNetwork() {
     let particles: Particle[] = [];
     let sparks: Spark[] = [];
     let animationFrameId: number;
-    let mouse = { x: -1000, y: -1000, radius: 150 };
+    const mouse = { x: -1000, y: -1000, radius: 150 };
 
     // تنظیم اندازه بوم
     const resizeCanvas = () => {
