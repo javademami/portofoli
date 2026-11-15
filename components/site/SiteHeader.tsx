@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import AdminNavbarLink from "@/components/AdminNavbarLink";
+import CartLink from "@/components/site/CartLink";
 import { useLang, type Lang } from "@/components/site/LanguageContext";
 import { SITE_T } from "@/components/site/siteStrings";
 
@@ -12,6 +13,7 @@ export default function SiteHeader({ isSignedIn }: { isSignedIn: boolean }) {
   const t = SITE_T[lang];
   const [open, setOpen] = useState(false);
   const linkClass = "text-zinc-400 hover:text-white transition-colors";
+  const cartLabel = lang === "sv" ? "Varukorg" : "Cart";
 
   const links = [
     { href: "/#hero", label: t.nav.home },
@@ -24,7 +26,6 @@ export default function SiteHeader({ isSignedIn }: { isSignedIn: boolean }) {
     { href: "/blog", label: t.nav.blog },
   ];
 
-  // Each item fades and slides in with a small delay, so the menu opens in sequence.
   const itemClass = (i: number) =>
     `transition-all duration-300 ease-out ${open ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"}`;
   const itemDelay = (i: number) => ({ transitionDelay: open ? `${80 + i * 50}ms` : "0ms" });
@@ -63,6 +64,8 @@ export default function SiteHeader({ isSignedIn }: { isSignedIn: boolean }) {
               </button>
             ))}
           </div>
+
+          <CartLink isSignedIn={isSignedIn} />
 
           {isSignedIn ? (
             <>
@@ -135,7 +138,16 @@ export default function SiteHeader({ isSignedIn }: { isSignedIn: boolean }) {
               </Link>
             ))}
 
-            <div onClick={() => setOpen(false)} style={itemDelay(links.length)} className={`px-3 py-2 ${itemClass(links.length)}`}>
+            <Link
+              href="/cart"
+              onClick={() => setOpen(false)}
+              style={itemDelay(links.length)}
+              className={`rounded-xl px-3 py-3 text-zinc-300 hover:bg-white/5 hover:text-white ${itemClass(links.length)}`}
+            >
+              {cartLabel}
+            </Link>
+
+            <div onClick={() => setOpen(false)} style={itemDelay(links.length + 1)} className={`px-3 py-2 ${itemClass(links.length + 1)}`}>
               <AdminNavbarLink />
             </div>
 
@@ -143,8 +155,8 @@ export default function SiteHeader({ isSignedIn }: { isSignedIn: boolean }) {
               <Link
                 href="/dashboard"
                 onClick={() => setOpen(false)}
-                style={itemDelay(links.length + 1)}
-                className={`rounded-xl px-3 py-3 text-amber-300 hover:bg-white/5 ${itemClass(links.length + 1)}`}
+                style={itemDelay(links.length + 2)}
+                className={`rounded-xl px-3 py-3 text-amber-300 hover:bg-white/5 ${itemClass(links.length + 2)}`}
               >
                 {t.myAccount}
               </Link>
@@ -153,8 +165,8 @@ export default function SiteHeader({ isSignedIn }: { isSignedIn: boolean }) {
             <Link
               href="/#contact"
               onClick={() => setOpen(false)}
-              style={itemDelay(links.length + 2)}
-              className={`mt-2 rounded-full border border-amber-500/40 px-5 py-3 text-center text-xs font-semibold tracking-wide text-amber-400 ${itemClass(links.length + 2)}`}
+              style={itemDelay(links.length + 3)}
+              className={`mt-2 rounded-full border border-amber-500/40 px-5 py-3 text-center text-xs font-semibold tracking-wide text-amber-400 ${itemClass(links.length + 3)}`}
             >
               {t.letsTalk}
             </Link>

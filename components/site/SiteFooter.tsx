@@ -1,13 +1,19 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import AdminNavbarLink from "@/components/AdminNavbarLink";
 import { useLang } from "@/components/site/LanguageContext";
 import { SITE_T } from "@/components/site/siteStrings";
 
+const LEGAL = {
+  en: { terms: "Terms of Sale", privacy: "Privacy", refund: "Refunds" },
+  sv: { terms: "Villkor", privacy: "Integritet", refund: "Återbetalning" },
+};
+
 export default function SiteFooter() {
   const { lang } = useLang();
   const t = SITE_T[lang];
+  const legal = LEGAL[lang];
   const linkClass = "hover:text-white transition-colors";
 
   return (
@@ -27,6 +33,10 @@ export default function SiteFooter() {
           <Link className={linkClass} href="/#experience">{t.nav.experience}</Link>
           <Link className={linkClass} href="/#contact">{t.nav.contact}</Link>
           <Link className={linkClass} href="/store">{t.nav.store}</Link>
+          <Link className={linkClass} href="/blog">{t.nav.blog}</Link>
+          <Link className={linkClass} href="/terms">{legal.terms}</Link>
+          <Link className={linkClass} href="/privacy">{legal.privacy}</Link>
+          <Link className={linkClass} href="/refund">{legal.refund}</Link>
           <AdminNavbarLink />
         </div>
       </div>

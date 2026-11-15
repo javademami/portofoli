@@ -1,67 +1,97 @@
-import { Product } from "@/models/Product";
+﻿import Link from "next/link";
+import type { Metadata } from "next";
 import { connectDB } from "@/lib/mongodb";
-import Link from "next/link";
+import { Product } from "@/models/Product";
+import Bi from "@/components/site/Bi";
 
-export const revalidate = 60;
 export const dynamic = "force-dynamic";
 
-export default async function StorePage() {
+export const metadata: Metadata = {
+  title: "Store",
+  description: "Digital products: templates, scripts and files ready to download.",
+  alternates: { canonical: "/store" },
+};
+
+function escapeRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+type Props = { searchParams: Promise<{ q?: string }> };
+
+export default async function StorePage({ searchParams }: Props) {
+  const { q = "" } = await searchParams;
+  const term = q.trim().slice(0, 100);
+
   await connectDB();
-  const products = await Product.find({ published: true })
-    .select("-fileKey")
+  const filter: Record<string, unknown> = { published: true, priceUsdt: { $gt: 0 } };
+  if (term) {
+    const rx = new RegExp(escapeRegex(term), "i");
+    filter.$or = [{ title: rx }, { description: rx }];
+  }
+
+  const products = await Product.find(filter)
+    .select("title slug description priceUsdt coverImage")
     .sort({ createdAt: -1 })
     .lean();
 
   return (
-    <div className="min-h-screen bg-[#0B0D13] text-white py-12 px-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-2">Store</h1>
-        <p className="text-zinc-400 mb-12">Digital products. Buy once, download your files privately.</p>
+    <div className="mx-auto max-w-6xl px-4 py-12 text-zinc-100">
+      <h1 className="text-3xl font-semibold">
+        <Bi en="Store" sv="Butik" />
+      </h1>
+      <p className="mt-2 text-zinc-400">
+        <Bi
+          en="Digital products, ready to download after payment."
+          sv="Digitala produkter, redo att laddas ner efter betalning."
+        />
+      </p>
 
-        {products.length === 0 ? (
-          <div className="bg-[#11141D] border border-zinc-800 rounded-3xl p-16 text-center text-zinc-400">
-            No products available yet. Check back soon.
-          </div>
-        ) : (
-          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product) => {
-              const price = product.priceSek.toLocaleString("sv-SE", {
-                style: "currency",
-                currency: "SEK",
-              });
-              return (
-                <li key={product._id.toString()}>
-                  <Link
-                    href={`/store/${product.slug}`}
-                    className="block bg-[#11141D] border border-zinc-800 rounded-3xl overflow-hidden hover:border-amber-500/50 transition-colors group"
-                  >
-                    <div className="aspect-[4/3] bg-gradient-to-br from-amber-500/10 to-[#0B0D13] border-b border-zinc-800 flex items-center justify-center group-hover:from-amber-500/20 transition-colors">
-                      {product.coverImage ? (
-                        <img
-                          src={product.coverImage}
-                          alt={product.title}
-                          className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
-                        />
-                      ) : (
-                        <span className="text-amber-500 font-mono-code text-xs">No cover image</span>
-                      )}
-                    </div>
-                    <div className="p-6">
-                      <h3 className="text-xl font-bold text-white mb-1 group-hover:text-amber-400 transition-colors">
-                        {product.title}
-                      </h3>
-                      <p className="text-zinc-400 text-sm line-clamp-2 mb-4">{product.description}</p>
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-bold text-amber-400">{price}</span>
-                        <span className="text-xs text-zinc-500 uppercase tracking-wider">Digital download</span>
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      <form method="get" className="mt-6 flex max-w-md items-center gap-3">
+        <input
+          name="q"
+          defaultValue={term}
+          className="flex-1 rounded-full border border-white/15 bg-black/30 px-5 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+        />
+        <button
+          type="submit"
+          className="rounded-full bg-amber-400 px-5 py-2.5 text-sm font-medium text-zinc-900 hover:bg-amber-300"
+        >
+          <Bi en="Search" sv="Sök" />
+        </button>
+      </form>
+
+      {products.length === 0 && (
+        <p className="mt-10 text-zinc-500">
+          {term ? (
+            <Bi en="No products match your search." sv="Inga produkter matchar din sökning." />
+          ) : (
+            <Bi en="No products yet." sv="Inga produkter ännu." />
+          )}
+        </p>
+      )}
+
+      <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {products.map((p) => (
+          <Link
+            key={String(p._id)}
+            href={`/store/${p.slug}`}
+            className="group overflow-hidden rounded-3xl border border-white/10 bg-white/5 transition hover:border-amber-400/40"
+          >
+            {p.coverImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.coverImage} alt={p.title} className="h-48 w-full object-cover" />
+            ) : (
+              <div className="flex h-48 items-center justify-center bg-white/5 text-zinc-600">
+                <Bi en="No cover" sv="Ingen bild" />
+              </div>
+            )}
+            <div className="p-6">
+              <h2 className="text-lg font-medium group-hover:text-amber-300">{p.title}</h2>
+              {p.description && <p className="mt-2 line-clamp-2 text-sm text-zinc-400">{p.description}</p>}
+              <p className="mt-4 text-lg font-semibold text-amber-400">{p.priceUsdt.toFixed(2)} USDT</p>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

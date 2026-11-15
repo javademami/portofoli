@@ -2,10 +2,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongodb";
-import { CryptoOrder } from "@/models/CryptoOrder";
+import { ORDER_TTL_MS, USDT_TRC20_CONTRACT, formatUsdt } from "@/lib/crypto";
 import { fetchIncomingUsdt } from "@/lib/tron";
-import { USDT_TRC20_CONTRACT, formatUsdt } from "@/lib/crypto";
 import { fulfillCryptoOrder } from "@/lib/fulfill";
+import { CryptoOrder } from "@/models/CryptoOrder";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -14,54 +14,53 @@ export async function GET(_req: Request, { params }: Ctx) {
   if (!userId) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!Types.ObjectId.isValid(id)) {
-    return NextResponse.json({ error: "invalid id" }, { status: 400 });
-  }
+  if (!Types.ObjectId.isValid(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
   await connectDB();
-  let order = await CryptoOrder.findOne({ _id: id, userId });
+  const order = await CryptoOrder.findOne({ _id: id, userId }).lean();
   if (!order) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  if (order.status === "pending") {
-    if (order.expiresAt.getTime() < Date.now()) {
-      order.status = "expired";
-      await order.save();
-    } else {
-      try {
-        const transfers = await fetchIncomingUsdt(order.address, order.createdAt.getTime());
-        const match = transfers.find(
-          (tx) =>
-            tx.to_address === order!.address &&
-            tx.contract_address === USDT_TRC20_CONTRACT &&
-            tx.confirmed &&
-            tx.finalResult === "SUCCESS" &&
-            !tx.revert &&
-            Number(tx.quant) === order!.amountMicro
-        );
+  let status = order.status;
 
-        if (match) {
-          // Only one request can flip the order from pending to paid.
-          const claimed = await CryptoOrder.findOneAndUpdate(
-            { _id: order._id, status: "pending" },
-            { status: "paid", txid: match.transaction_id, paidAt: new Date() },
-            { new: true }
-          ).catch(() => null); // a duplicate txid ends up here
+  if (status === "pending" && order.expiresAt.getTime() < Date.now()) {
+    await CryptoOrder.updateOne({ _id: order._id, status: "pending" }, { $set: { status: "expired" } });
+    status = "expired";
+  }
 
-          if (claimed) {
-            await fulfillCryptoOrder(claimed);
-            order = claimed;
-          }
+  // Pending orders are checked normally. Expired orders are checked too, so a late payment still counts.
+  if (status === "pending" || status === "expired") {
+    try {
+      const transfers = await fetchIncomingUsdt(order.address, order.expiresAt.getTime() - ORDER_TTL_MS);
+      const match = transfers.find(
+        (t) =>
+          t.to_address === order.address &&
+          t.contract_address === USDT_TRC20_CONTRACT &&
+          t.confirmed &&
+          t.finalResult === "SUCCESS" &&
+          !t.revert &&
+          Number(t.quant) === order.amountMicro
+      );
+
+      if (match) {
+        const claimed = await CryptoOrder.findOneAndUpdate(
+          { _id: order._id, status: { $in: ["pending", "expired"] } },
+          { $set: { status: "paid", txid: match.transaction_id, paidAt: new Date() } },
+          { new: true }
+        ).lean();
+
+        if (claimed) {
+          await fulfillCryptoOrder(claimed);
+          status = "paid";
         }
-      } catch (err) {
-        // Tronscan hiccup: keep the order pending and let the next poll retry.
-        console.error("[crypto verify]", err);
       }
+    } catch (err) {
+      console.error("crypto order check failed", err);
     }
   }
 
   return NextResponse.json({
-    status: order.status,
-    productId: String(order.productId),
+    status,
+    productIds: (order.productIds ?? []).map(String),
     amount: formatUsdt(order.amountMicro),
     address: order.address,
     network: order.network,

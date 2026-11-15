@@ -10,7 +10,7 @@ type Product = {
   title: string;
   slug: string;
   description: string;
-  priceSek: number;
+  priceUsdt?: number | null;
   coverImage?: string;
   fileName: string;
   published: boolean;
@@ -20,20 +20,42 @@ const inputClass =
   "w-full rounded-full border border-zinc-700/80 bg-[#161B26] px-5 py-3 text-sm text-white focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400";
 const labelClass = "mb-1.5 block text-xs font-medium text-zinc-400";
 
+const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
+const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+
+// Converts Persian/Arabic digits to Latin and keeps only digits and one decimal point.
+function normalizePrice(input: string) {
+  return input
+    .split("")
+    .map((ch) => {
+      const fa = FA_DIGITS.indexOf(ch);
+      if (fa >= 0) return String(fa);
+      const ar = AR_DIGITS.indexOf(ch);
+      if (ar >= 0) return String(ar);
+      if (ch === "٫" || ch === ",") return ".";
+      return ch;
+    })
+    .join("")
+    .replace(/[^0-9.]/g, "")
+    .replace(/(\..*)\./g, "$1");
+}
+
 export default function EditProductPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
+  const [priceText, setPriceText] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/admin/products/${id}`)
+    fetch(`/api/admin/products/${id}`, { cache: "no-store" })
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "خطا");
         setProduct(d.product);
+        setPriceText(d.product.priceUsdt ? String(d.product.priceUsdt) : "");
       })
       .catch((e) => setLoadError(e instanceof Error ? e.message : "خطا"));
   }, [id]);
@@ -44,6 +66,13 @@ export default function EditProductPage() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!product) return;
+
+    const price = Number(priceText);
+    if (!(price > 0)) {
+      setSaveError("قیمت را به‌صورت عدد وارد کنید، مثلاً 9.99");
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     try {
@@ -54,12 +83,12 @@ export default function EditProductPage() {
           title: product.title,
           slug: product.slug,
           description: product.description,
-          priceSek: Number(product.priceSek),
+          priceUsdt: price,
           coverImage: product.coverImage ?? "",
           published: product.published,
         }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "خطا در ذخیره");
       router.push("/admin/products");
     } catch (err) {
@@ -94,7 +123,7 @@ export default function EditProductPage() {
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <form onSubmit={onSubmit} noValidate className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-5 rounded-3xl border border-zinc-800 bg-[#11141D] p-6 lg:col-span-2">
           <div>
             <label className={labelClass}>عنوان</label>
@@ -102,16 +131,15 @@ export default function EditProductPage() {
               className={inputClass}
               value={product.title}
               onChange={(e) => update("title", e.target.value)}
-              required
             />
           </div>
           <div>
             <label className={labelClass}>Slug</label>
             <input
+              dir="ltr"
               className={inputClass}
               value={product.slug}
               onChange={(e) => update("slug", e.target.value)}
-              required
             />
           </div>
           <div>
@@ -121,29 +149,26 @@ export default function EditProductPage() {
               className={`${inputClass} rounded-3xl`}
               value={product.description}
               onChange={(e) => update("description", e.target.value)}
-              required
             />
           </div>
         </div>
 
         <div className="space-y-5 rounded-3xl border border-zinc-800 bg-[#11141D] p-6">
           <div>
-            <label className={labelClass}>قیمت (SEK)</label>
+            <label className={labelClass}>قیمت (USDT)</label>
             <input
-              type="number"
-              min={0}
+              type="text"
+              inputMode="decimal"
+              dir="ltr"
               className={inputClass}
-              value={product.priceSek}
-              onChange={(e) => update("priceSek", Number(e.target.value))}
-              required
+              placeholder="9.99"
+              value={priceText}
+              onChange={(e) => setPriceText(normalizePrice(e.target.value))}
             />
           </div>
           <div>
             <label className={labelClass}>تصویر کاور</label>
-            <CoverUpload
-              value={product.coverImage ?? ""}
-              onChange={(url) => update("coverImage", url)}
-            />
+            <CoverUpload value={product.coverImage ?? ""} onChange={(url) => update("coverImage", url)} />
           </div>
           <label className="flex cursor-pointer items-center gap-3">
             <input
