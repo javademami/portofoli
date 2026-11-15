@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useLang } from "@/components/site/LanguageContext";
 
-type OrderStatus = {
+type OrderState = {
   status: "pending" | "paid" | "expired";
   amount: string;
   address: string;
@@ -13,130 +13,179 @@ type OrderStatus = {
   expiresAt: string;
 };
 
-const X = {
+const T = {
   en: {
     title: "Pay with USDT",
-    send: "Send exactly this amount",
-    to: "To this address",
-    network: "Network: TRON (TRC20) only. Sending on another network will lose your funds.",
+    loading: "Loading…",
+    notFound: "Order not found.",
+    error: "Could not load the order.",
+    send: "Send exactly this amount:",
+    address: "To this address (TRON, TRC20 only):",
     copy: "Copy",
     copied: "Copied",
-    left: "Time left",
-    waiting: "Waiting for your transaction…",
-    paid: "Payment received. Thank you!",
-    expired: "This order has expired. Please start a new purchase.",
-    mine: "Go to my purchases",
-    loading: "Loading…",
+    warn: "Send only USDT on the TRON network (TRC20). Other networks may lose your funds.",
+    timeLeft: "Time left",
+    checking: "Waiting for your payment… this page updates automatically.",
+    expired: "This order has expired. Go back to your cart to start a new one.",
+    paid: "Payment received. Your files are ready.",
+    goPurchases: "Go to my purchases",
+    backCart: "Back to cart",
   },
   sv: {
     title: "Betala med USDT",
-    send: "Skicka exakt detta belopp",
-    to: "Till denna adress",
-    network: "Nätverk: endast TRON (TRC20). Skickar du på fel nätverk försvinner pengarna.",
-    copy: "Kopiera",
-    copied: "Kopierat",
-    left: "Tid kvar",
-    waiting: "Väntar på din transaktion…",
-    paid: "Betalningen är mottagen. Tack!",
-    expired: "Beställningen har gått ut. Starta ett nytt köp.",
-    mine: "Gå till mina köp",
     loading: "Laddar…",
+    notFound: "Ordern hittades inte.",
+    error: "Kunde inte ladda ordern.",
+    send: "Skicka exakt detta belopp:",
+    address: "Till denna adress (endast TRON, TRC20):",
+    copy: "Kopiera",
+    copied: "Kopierad",
+    warn: "Skicka endast USDT på TRON-nätverket (TRC20). Andra nätverk kan innebära att du förlorar pengarna.",
+    timeLeft: "Tid kvar",
+    checking: "Väntar på din betalning… sidan uppdateras automatiskt.",
+    expired: "Denna order har gått ut. Gå tillbaka till varukorgen för att börja om.",
+    paid: "Betalningen har tagits emot. Dina filer är redo.",
+    goPurchases: "Gå till Mina köp",
+    backCart: "Tillbaka till varukorgen",
   },
 };
 
+function formatLeft(ms: number) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 export default function CryptoCheckoutPage() {
   const { lang } = useLang();
-  const t = X[lang];
+  const t = T[lang];
   const { id } = useParams<{ id: string }>();
-  const [order, setOrder] = useState<OrderStatus | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [now, setNow] = useState(Date.now());
 
+  const [order, setOrder] = useState<OrderState | null>(null);
+  const [error, setError] = useState<"notFound" | "error" | null>(null);
+  const [now, setNow] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Checks the order every 15 seconds until it is paid.
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const poll = async () => {
+    const load = async () => {
       try {
         const res = await fetch(`/api/crypto/orders/${id}`, { cache: "no-store" });
-        if (res.ok && !cancelled) {
-          const data: OrderStatus = await res.json();
-          setOrder(data);
-          if (data.status !== "pending") return;
+        if (cancelled) return;
+        if (res.status === 404) {
+          setError("notFound");
+          return;
+        }
+        if (!res.ok) {
+          setError("error");
+        } else {
+          const d = (await res.json()) as OrderState;
+          setOrder(d);
+          setError(null);
+          if (d.status === "paid") return;
         }
       } catch {
-        // network hiccup: try again below
+        if (!cancelled) setError("error");
       }
-      if (!cancelled) timer = setTimeout(poll, 15000);
+      if (!cancelled) timer = setTimeout(load, 15000);
     };
 
-    poll();
+    load();
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
   }, [id]);
 
+  // Clock for the countdown.
   useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
   }, []);
 
-  const copyAddress = async () => {
+  async function copyAddress() {
     if (!order) return;
     try {
       await navigator.clipboard.writeText(order.address);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
-  };
-
-  if (!order) {
-    return <div className="mx-auto max-w-2xl px-6 py-24 text-zinc-400">{t.loading}</div>;
+    } catch {
+      // clipboard may be blocked; the address is still visible
+    }
   }
 
-  const msLeft = new Date(order.expiresAt).getTime() - now;
-  const mm = Math.max(0, Math.floor(msLeft / 60000));
-  const ss = Math.max(0, Math.floor((msLeft % 60000) / 1000));
+  const left = order && now !== null ? new Date(order.expiresAt).getTime() - now : null;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 px-6 py-16">
-      <h1 className="text-3xl font-extrabold">{t.title}</h1>
+    <div className="mx-auto max-w-2xl px-4 py-12 text-zinc-100">
+      <h1 className="text-3xl font-semibold">{t.title}</h1>
 
-      {order.status === "paid" && (
-        <div className="rounded-3xl border border-emerald-500/30 bg-emerald-900/20 p-6 text-emerald-300">
-          <p className="font-semibold">{t.paid}</p>
-          <Link href="/dashboard/purchases" className="mt-4 inline-flex text-sm text-amber-400 underline">{t.mine}</Link>
+      {error === "notFound" && <p className="mt-8 text-zinc-400">{t.notFound}</p>}
+      {error === "error" && <p className="mt-8 text-red-400">{t.error}</p>}
+      {!order && !error && <p className="mt-8 text-zinc-400">{t.loading}</p>}
+
+      {order && order.status === "paid" && (
+        <div className="mt-8 rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6">
+          <p className="text-emerald-300">{t.paid}</p>
+          <Link
+            href="/dashboard/purchases"
+            className="mt-5 inline-flex rounded-full bg-amber-400 px-6 py-2.5 text-sm font-medium text-zinc-900 hover:bg-amber-300"
+          >
+            {t.goPurchases}
+          </Link>
         </div>
       )}
 
-      {order.status === "expired" && (
-        <div className="rounded-3xl border border-rose-500/30 bg-rose-900/20 p-6 text-rose-300">{t.expired}</div>
+      {order && order.status === "expired" && (
+        <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <p className="text-zinc-300">{t.expired}</p>
+          <Link
+            href="/cart"
+            className="mt-5 inline-flex rounded-full border border-white/15 px-6 py-2.5 text-sm text-zinc-200 hover:border-amber-400"
+          >
+            {t.backCart}
+          </Link>
+        </div>
       )}
 
-      {order.status === "pending" && (
-        <div className="space-y-6 rounded-3xl border border-zinc-800 bg-[#11141D] p-6">
+      {order && order.status === "pending" && (
+        <div className="mt-8 space-y-6 rounded-3xl border border-white/10 bg-white/5 p-6">
           <div>
             <p className="text-sm text-zinc-400">{t.send}</p>
-            <p className="mt-1 text-3xl font-extrabold text-amber-400">{order.amount} USDT</p>
+            <p className="mt-2 break-all text-3xl font-bold text-amber-400">{order.amount} USDT</p>
           </div>
 
           <div>
-            <p className="text-sm text-zinc-400">{t.to}</p>
-            <div className="mt-2 flex items-center gap-3 rounded-2xl border border-zinc-700 bg-[#0B0D13] p-4">
-              <code className="flex-1 break-all text-sm text-zinc-200">{order.address}</code>
-              <button type="button" onClick={copyAddress} className="shrink-0 rounded-full border border-zinc-600 px-4 py-2 text-xs hover:border-amber-400">
+            <p className="text-sm text-zinc-400">{t.address}</p>
+            <div className="mt-2 flex items-center gap-3">
+              <code className="flex-1 break-all rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
+                {order.address}
+              </code>
+              <button
+                type="button"
+                onClick={copyAddress}
+                className="shrink-0 rounded-full border border-white/15 px-4 py-2 text-sm hover:border-amber-400"
+              >
                 {copied ? t.copied : t.copy}
               </button>
             </div>
           </div>
 
-          <p className="rounded-2xl bg-amber-500/10 p-4 text-sm text-amber-300">{t.network}</p>
+          <p className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            {t.warn}
+          </p>
 
           <div className="flex items-center justify-between text-sm text-zinc-400">
-            <span>{t.waiting}</span>
-            <span>{t.left}: {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}</span>
+            <span>{t.timeLeft}</span>
+            <span className="font-mono text-zinc-200">{left !== null ? formatLeft(left) : "--:--"}</span>
           </div>
+
+          <p className="text-xs text-zinc-500">{t.checking}</p>
         </div>
       )}
     </div>

@@ -65,7 +65,7 @@ export default function NewProductPage() {
             <input name="title" required className={inputClass} placeholder="مثلا: راهنمای کامل Next.js" />
           </div>
           <div>
-            <label className={labelClass}>Slug (اختیاری خالی بماند از عنوان ساخته میشود)</label>
+            <label className={labelClass}>Slug (اختیاری، خالی بماند از عنوان ساخته می‌شود)</label>
             <input name="slug" className={inputClass} placeholder="nextjs-guide" />
           </div>
           <div>
@@ -76,8 +76,16 @@ export default function NewProductPage() {
 
         <div className="space-y-5 rounded-3xl border border-zinc-800 bg-[#11141D] p-6">
           <div>
-            <label className={labelClass}>قیمت (SEK)</label>
-            <input name="priceSek" type="number" min={0} required className={inputClass} placeholder="199" />
+            <label className={labelClass}>قیمت (USDT)</label>
+            <input
+              name="priceUsdt"
+              type="number"
+              step="0.01"
+              min={0.01}
+              required
+              className={inputClass}
+              placeholder="9.99"
+            />
           </div>
 
           <div>

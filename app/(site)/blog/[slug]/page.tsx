@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { connectDB } from "@/lib/mongodb";
 import { Post } from "@/models/Post";
+import Bi from "@/components/site/Bi";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,7 @@ export default async function BlogPostPage({ params }: Props) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <Link href="/blog" className="text-sm text-zinc-400 hover:text-amber-300">
-        ← Back to blog
+        ← <Bi en="Back to blog" sv="Tillbaka till bloggen" />
       </Link>
 
       <article className="mt-6">

@@ -1,91 +1,77 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { requireAdmin } from "@/lib/admin";
 import { connectDB } from "@/lib/mongodb";
+import { cleanText, makeSlug } from "@/lib/posts";
 import { supabaseAdmin, BUCKET } from "@/lib/supabase";
 import { Product } from "@/models/Product";
 
-const MAX_BYTES = 50 * 1024 * 1024;
-const ALLOWED_EXT = ["pdf", "zip", "epub", "png", "jpg", "jpeg", "mp3", "mp4"];
-
-export function slugify(text: string) {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 export async function GET() {
   const denied = await requireAdmin();
   if (denied) return denied;
 
   await connectDB();
-  const products = await Product.find().select("-fileKey").sort({ createdAt: -1 }).lean();
+  const products = await Product.find({})
+    .select("title slug priceUsdt published fileName coverImage createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
   return NextResponse.json({ products });
 }
 
+// Creates a product: uploads the private file to Supabase and stores its key.
 export async function POST(req: Request) {
   const denied = await requireAdmin();
   if (denied) return denied;
 
   const form = await req.formData();
-  const title = String(form.get("title") ?? "").trim();
-  const slug = slugify(String(form.get("slug") || title));
-  const description = String(form.get("description") ?? "").trim();
-  const priceSek = Number(form.get("priceSek"));
-  const coverImage = String(form.get("coverImage") ?? "").trim() || undefined;
-  const published = form.get("published") === "true";
+  const title = cleanText(form.get("title"), 200);
+  if (!title) return NextResponse.json({ error: "عنوان الزامی است" }, { status: 400 });
+
+  const priceUsdt = Number(form.get("priceUsdt"));
+  if (!(priceUsdt > 0)) {
+    return NextResponse.json({ error: "قیمت باید بیشتر از صفر باشد" }, { status: 400 });
+  }
+
   const file = form.get("file");
-
-  if (!title || !slug || !description) {
-    return NextResponse.json({ error: "عنوان، slug و توضیحات الزامی است" }, { status: 400 });
-  }
-  if (!Number.isFinite(priceSek) || priceSek < 0) {
-    return NextResponse.json({ error: "قیمت نامعتبر است" }, { status: 400 });
-  }
   if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "فایل الزامی است" }, { status: 400 });
+    return NextResponse.json({ error: "فایل محصول الزامی است" }, { status: 400 });
   }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "حداکثر حجم فایل ۵۰ مگابایت است" }, { status: 413 });
-  }
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (!ALLOWED_EXT.includes(ext)) {
-    return NextResponse.json({ error: "نوع فایل مجاز نیست" }, { status: 415 });
+  if (file.size > MAX_FILE_BYTES) {
+    return NextResponse.json({ error: "حجم فایل بیشتر از ۵۰ مگابایت است" }, { status: 413 });
   }
 
-  // Storage key is built from the slug and timestamp, never from the raw user filename.
-    const key = `products/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-
-  await connectDB();
+  const ext = ((file.name.split(".").pop() ?? "bin").toLowerCase().replace(/[^a-z0-9]/g, "")) || "bin";
+  const key = `products/${Date.now()}-${randomUUID()}.${ext}`;
   const { error: uploadError } = await supabaseAdmin.storage
     .from(BUCKET)
-    .upload(key, file, { contentType: file.type || "application/octet-stream", upsert: false });
+    .upload(key, Buffer.from(await file.arrayBuffer()), {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
   if (uploadError) {
-    console.error("[supabase upload]", uploadError);
-    return NextResponse.json({ error: "آپلود فایل ناموفق بود" }, { status: 500 });
+    return NextResponse.json({ error: uploadError.message }, { status: 500 });
   }
 
+  await connectDB();
   try {
     const product = await Product.create({
-      slug,
       title,
-      description,
-      priceSek,
-      coverImage,
-      published,
+      slug: makeSlug(title, form.get("slug")),
+      description: cleanText(form.get("description"), 10000),
+      priceUsdt,
+      priceSek: 0,
+      coverImage: cleanText(form.get("coverImage"), 1000),
       fileKey: key,
       fileName: file.name,
+      published: form.get("published") === "true",
     });
     return NextResponse.json({ id: String(product._id) }, { status: 201 });
-  } catch (err: any) {
-    console.error("[product create]", err);
-    // Roll back the uploaded file if the database write failed.
-    await supabaseAdmin.storage.from(BUCKET).remove([key]);
-    if (err?.code === 11000) {
-      return NextResponse.json({ error: "این slug قبلاً استفاده شده است" }, { status: 409 });
+  } catch (e) {
+    if ((e as { code?: number }).code === 11000) {
+      return NextResponse.json({ error: "این نشانی (slug) قبلاً استفاده شده" }, { status: 409 });
     }
-    return NextResponse.json({ error: "خطای سرور" }, { status: 500 });
+    throw e;
   }
 }

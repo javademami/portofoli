@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { connectDB } from "@/lib/mongodb";
 import { Post } from "@/models/Post";
+import Bi from "@/components/site/Bi";
 
 export const dynamic = "force-dynamic";
 
@@ -21,10 +22,18 @@ export default async function BlogPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 text-zinc-100">
-      <h1 className="text-3xl font-semibold">Blog</h1>
-      <p className="mt-2 text-zinc-400">Notes, projects and thoughts.</p>
+      <h1 className="text-3xl font-semibold">
+        <Bi en="Blog" sv="Blogg" />
+      </h1>
+      <p className="mt-2 text-zinc-400">
+        <Bi en="Notes, projects and thoughts." sv="Anteckningar, projekt och tankar." />
+      </p>
 
-      {posts.length === 0 && <p className="mt-8 text-zinc-400">No posts yet.</p>}
+      {posts.length === 0 && (
+        <p className="mt-8 text-zinc-400">
+          <Bi en="No posts yet." sv="Inga inlägg ännu." />
+        </p>
+      )}
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2">
         {posts.map((p) => (
@@ -45,7 +54,9 @@ export default async function BlogPage() {
               )}
               <h2 className="mt-2 text-xl font-medium group-hover:text-amber-300">{p.title}</h2>
               {p.excerpt && <p className="mt-2 text-sm text-zinc-400">{p.excerpt}</p>}
-              <span className="mt-4 inline-block text-sm text-amber-300">Read more →</span>
+              <span className="mt-4 inline-block text-sm text-amber-300">
+                <Bi en="Read more →" sv="Läs mer →" />
+              </span>
             </div>
           </Link>
         ))}
