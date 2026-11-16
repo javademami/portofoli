@@ -51,7 +51,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
         if (cursor === id) {
           return NextResponse.json({ error: "این تغییر باعث حلقه در ساختار مجموعه‌ها می‌شود" }, { status: 400 });
         }
-        const node = await Collection.findById(cursor).select("parent").lean();
+        const node: { parent?: unknown } | null = await Collection.findById(cursor).select("parent").lean();
         if (!node) break;
         cursor = node.parent ? String(node.parent) : null;
       }

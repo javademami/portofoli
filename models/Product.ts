@@ -20,7 +20,7 @@ const ProductSchema = new Schema(
     faq: { type: [FaqSchema], default: [] },
     demoUrl: { type: String, default: "", maxlength: 500 },
     collection: { type: Schema.Types.ObjectId, ref: "Collection", default: null },
-    fileKey: { type: String, select: false },
+    fileKey: { type: String, required: true, select: false },
     fileName: { type: String, default: "" },
     fileFormat: { type: String, default: "" },
     fileSize: { type: Number, default: 0 },

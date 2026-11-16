@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { readCart } from "@/lib/guestCart";
 
-export default function CartLink() {
+export default function CartLink(_props: { isSignedIn?: boolean }) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
