@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
   const code = typeof body.code === "string" ? body.code.trim().toUpperCase() : "";
   if (!/^[A-Z0-9_-]{3,32}$/.test(code)) {
-    return NextResponse.json({ error: "invalid code" }, { status: 400 });
+    return NextResponse.json({ error: "کد باید ۳ تا ۳۲ کاراکتر و فقط شامل حروف انگلیسی، عدد، _ و - باشد" }, { status: 400 });
   }
 
   const percentOff = Number(body.percentOff);

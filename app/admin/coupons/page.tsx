@@ -97,7 +97,7 @@ export default function AdminCouponsPage() {
       <form onSubmit={create} className="grid gap-3 rounded-xl border border-white/10 p-4 md:grid-cols-5">
         <input
           value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          onChange={(e) => setCode(e.target.value.toUpperCase().replace(/\s+/g, ""))}
           placeholder="کد (مثلاً SUMMER25)"
           required
           className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 uppercase"

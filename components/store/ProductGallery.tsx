@@ -56,7 +56,7 @@ export default function ProductGallery({
         <img
           src={current}
           alt={`${title} ${index + 1}`}
-          className="w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
+          className="aspect-square w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
         />
       </button>
 
