@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -8,6 +8,8 @@ const NAV = [
   { href: "/admin", label: "داشبورد", icon: "◻" },
   { href: "/admin/products", label: "محصولات", icon: "◈" },
   { href: "/admin/orders", label: "سفارش‌ها", icon: "▤" },
+  { href: "/admin/coupons", label: "کدهای تخفیف", icon: "％" },
+  { href: "/admin/collections", label: "مجموعه‌ها", icon: "▦" },
   { href: "/admin/tickets", label: "پشتیبانی", icon: "✉" },
   { href: "/admin/posts", label: "پست‌های وبلاگ", icon: "✎" },
 ];

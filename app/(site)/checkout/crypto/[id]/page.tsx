@@ -1,11 +1,12 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { useLang } from "@/components/site/LanguageContext";
 
-type OrderState = {
+type OrderData = {
   status: "pending" | "paid" | "expired";
   amount: string;
   address: string;
@@ -13,181 +14,160 @@ type OrderState = {
   expiresAt: string;
 };
 
-const T = {
-  en: {
-    title: "Pay with USDT",
-    loading: "Loading…",
-    notFound: "Order not found.",
-    error: "Could not load the order.",
-    send: "Send exactly this amount:",
-    address: "To this address (TRON, TRC20 only):",
-    copy: "Copy",
-    copied: "Copied",
-    warn: "Send only USDT on the TRON network (TRC20). Other networks may lose your funds.",
-    timeLeft: "Time left",
-    checking: "Waiting for your payment… this page updates automatically.",
-    expired: "This order has expired. Go back to your cart to start a new one.",
-    paid: "Payment received. Your files are ready.",
-    goPurchases: "Go to my purchases",
-    backCart: "Back to cart",
-  },
-  sv: {
-    title: "Betala med USDT",
-    loading: "Laddar…",
-    notFound: "Ordern hittades inte.",
-    error: "Kunde inte ladda ordern.",
-    send: "Skicka exakt detta belopp:",
-    address: "Till denna adress (endast TRON, TRC20):",
-    copy: "Kopiera",
-    copied: "Kopierad",
-    warn: "Skicka endast USDT på TRON-nätverket (TRC20). Andra nätverk kan innebära att du förlorar pengarna.",
-    timeLeft: "Tid kvar",
-    checking: "Väntar på din betalning… sidan uppdateras automatiskt.",
-    expired: "Denna order har gått ut. Gå tillbaka till varukorgen för att börja om.",
-    paid: "Betalningen har tagits emot. Dina filer är redo.",
-    goPurchases: "Gå till Mina köp",
-    backCart: "Tillbaka till varukorgen",
-  },
-};
-
-function formatLeft(ms: number) {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
 export default function CryptoCheckoutPage() {
-  const { lang } = useLang();
-  const t = T[lang];
   const { id } = useParams<{ id: string }>();
+  const { lang } = useLang();
+  const t = (en: string, sv: string) => (lang === "sv" ? sv : en);
 
-  const [order, setOrder] = useState<OrderState | null>(null);
-  const [error, setError] = useState<"notFound" | "error" | null>(null);
-  const [now, setNow] = useState<number | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [order, setOrder] = useState<OrderData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [qr, setQr] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  const [copied, setCopied] = useState<"amount" | "address" | null>(null);
 
-  // Checks the order every 15 seconds until it is paid.
   useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const load = async () => {
+    let stopped = false;
+    async function poll() {
       try {
         const res = await fetch(`/api/crypto/orders/${id}`, { cache: "no-store" });
-        if (cancelled) return;
-        if (res.status === 404) {
-          setError("notFound");
+        if (res.status === 401) {
+          window.location.href = `/sign-in?redirect_url=${encodeURIComponent(window.location.pathname)}`;
           return;
         }
         if (!res.ok) {
-          setError("error");
-        } else {
-          const d = (await res.json()) as OrderState;
-          setOrder(d);
-          setError(null);
-          if (d.status === "paid") return;
+          if (!stopped) setError(t("Order not found.", "Beställningen hittades inte."));
+          return;
         }
+        const data = (await res.json()) as OrderData;
+        if (!stopped) setOrder(data);
       } catch {
-        if (!cancelled) setError("error");
+        if (!stopped) setError(t("Network error.", "Nätverksfel."));
       }
-      if (!cancelled) timer = setTimeout(load, 15000);
-    };
-
-    load();
+    }
+    poll();
+    const timer = setInterval(poll, 15000);
     return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
+      stopped = true;
+      clearInterval(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Clock for the countdown.
   useEffect(() => {
-    setNow(Date.now());
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  async function copyAddress() {
-    if (!order) return;
+  useEffect(() => {
+    if (!order?.address) return;
+    QRCode.toDataURL(order.address, { width: 220, margin: 1 })
+      .then(setQr)
+      .catch(() => setQr(""));
+  }, [order?.address]);
+
+  async function copy(text: string, which: "amount" | "address") {
     try {
-      await navigator.clipboard.writeText(order.address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      setTimeout(() => setCopied(null), 1500);
     } catch {
-      // clipboard may be blocked; the address is still visible
+      // clipboard may be blocked
     }
   }
 
-  const left = order && now !== null ? new Date(order.expiresAt).getTime() - now : null;
+  if (error) {
+    return <main className="mx-auto max-w-2xl px-4 py-16 text-center text-red-400">{error}</main>;
+  }
+  if (!order) {
+    return <main className="mx-auto max-w-2xl px-4 py-16 text-center text-white/60">{t("Loading...", "Laddar...")}</main>;
+  }
+
+  if (order.status === "paid") {
+    return (
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-16 text-center text-white">
+        <h1 className="text-3xl font-bold text-emerald-400">{t("Payment received", "Betalningen mottagen")}</h1>
+        <p className="text-white/70">
+          {t("Your products are ready in your purchases.", "Dina produkter finns i dina köp.")}
+        </p>
+        <Link href="/dashboard/purchases" className="inline-flex rounded-full bg-amber-400 px-6 py-3 font-medium text-black">
+          {t("Go to my purchases", "Gå till mina köp")}
+        </Link>
+      </main>
+    );
+  }
+
+  if (order.status === "expired") {
+    return (
+      <main className="mx-auto max-w-2xl space-y-4 px-4 py-16 text-center text-white">
+        <h1 className="text-3xl font-bold">{t("This order expired", "Beställningen har gått ut")}</h1>
+        <p className="text-white/70">
+          {t(
+            "If you already sent the payment, it will still be matched automatically.",
+            "Om du redan skickat betalningen matchas den ändå automatiskt."
+          )}
+        </p>
+        <Link href="/store" className="inline-flex rounded-full border border-white/20 px-6 py-3">
+          {t("Back to store", "Tillbaka till butiken")}
+        </Link>
+      </main>
+    );
+  }
+
+  const remaining = Math.max(0, new Date(order.expiresAt).getTime() - now);
+  const mins = String(Math.floor(remaining / 60000)).padStart(2, "0");
+  const secs = String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0");
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12 text-zinc-100">
-      <h1 className="text-3xl font-semibold">{t.title}</h1>
+    <main className="mx-auto max-w-2xl space-y-6 px-4 py-10 text-white">
+      <h1 className="text-3xl font-bold">{t("Pay with USDT", "Betala med USDT")}</h1>
 
-      {error === "notFound" && <p className="mt-8 text-zinc-400">{t.notFound}</p>}
-      {error === "error" && <p className="mt-8 text-red-400">{t.error}</p>}
-      {!order && !error && <p className="mt-8 text-zinc-400">{t.loading}</p>}
-
-      {order && order.status === "paid" && (
-        <div className="mt-8 rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6">
-          <p className="text-emerald-300">{t.paid}</p>
-          <Link
-            href="/dashboard/purchases"
-            className="mt-5 inline-flex rounded-full bg-amber-400 px-6 py-2.5 text-sm font-medium text-zinc-900 hover:bg-amber-300"
+      <div className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        <div className="text-sm text-white/60">{t("Amount to send (exact)", "Belopp att skicka (exakt)")}</div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="font-mono text-3xl font-semibold text-amber-400">{order.amount} USDT</span>
+          <button
+            type="button"
+            onClick={() => copy(order.amount, "amount")}
+            className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
           >
-            {t.goPurchases}
-          </Link>
+            {copied === "amount" ? t("Copied", "Kopierat") : t("Copy amount", "Kopiera belopp")}
+          </button>
         </div>
-      )}
+      </div>
 
-      {order && order.status === "expired" && (
-        <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
-          <p className="text-zinc-300">{t.expired}</p>
-          <Link
-            href="/cart"
-            className="mt-5 inline-flex rounded-full border border-white/15 px-6 py-2.5 text-sm text-zinc-200 hover:border-amber-400"
+      <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+        <div className="text-sm text-white/60">
+          {t("Network", "Nätverk")}: <span className="text-white">{order.network}</span>
+        </div>
+        <div className="break-all rounded-xl bg-black/40 p-3 font-mono text-sm">{order.address}</div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => copy(order.address, "address")}
+            className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20"
           >
-            {t.backCart}
-          </Link>
+            {copied === "address" ? t("Copied", "Kopierat") : t("Copy address", "Kopiera adress")}
+          </button>
         </div>
-      )}
-
-      {order && order.status === "pending" && (
-        <div className="mt-8 space-y-6 rounded-3xl border border-white/10 bg-white/5 p-6">
-          <div>
-            <p className="text-sm text-zinc-400">{t.send}</p>
-            <p className="mt-2 break-all text-3xl font-bold text-amber-400">{order.amount} USDT</p>
+        {qr && (
+          <div className="flex justify-center">
+            <img src={qr} alt="QR" className="rounded-xl bg-white p-2" width={220} height={220} />
           </div>
+        )}
+        <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-200">
+          {t(
+            "Only send USDT on the TRC20 network. Other networks will be lost.",
+            "Skicka endast USDT på TRC20-nätverket. Andra nätverk går förlorade."
+          )}
+        </p>
+      </div>
 
-          <div>
-            <p className="text-sm text-zinc-400">{t.address}</p>
-            <div className="mt-2 flex items-center gap-3">
-              <code className="flex-1 break-all rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
-                {order.address}
-              </code>
-              <button
-                type="button"
-                onClick={copyAddress}
-                className="shrink-0 rounded-full border border-white/15 px-4 py-2 text-sm hover:border-amber-400"
-              >
-                {copied ? t.copied : t.copy}
-              </button>
-            </div>
-          </div>
-
-          <p className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-            {t.warn}
-          </p>
-
-          <div className="flex items-center justify-between text-sm text-zinc-400">
-            <span>{t.timeLeft}</span>
-            <span className="font-mono text-zinc-200">{left !== null ? formatLeft(left) : "--:--"}</span>
-          </div>
-
-          <p className="text-xs text-zinc-500">{t.checking}</p>
-        </div>
-      )}
-    </div>
+      <div className="text-center text-white/70">
+        {t("Time left", "Tid kvar")}: <span className="font-mono text-white">{mins}:{secs}</span>
+      </div>
+      <p className="text-center text-xs text-white/40">
+        {t("We check the payment automatically. This page updates on its own.", "Vi kontrollerar betalningen automatiskt. Sidan uppdateras själv.")}
+      </p>
+    </main>
   );
 }
