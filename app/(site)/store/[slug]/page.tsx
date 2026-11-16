@@ -8,6 +8,7 @@ import { Purchase } from "@/models/Purchase";
 import { Review } from "@/models/Review";
 import CryptoBuyButton from "@/components/store/CryptoBuyButton";
 import ProductGallery from "@/components/store/ProductGallery";
+import ProductMeta from "@/components/store/ProductMeta";
 import RichDescription from "@/components/store/RichDescription";
 import ReviewForm from "@/components/store/ReviewForm";
 import Bi from "@/components/site/Bi";
@@ -110,7 +111,7 @@ export default async function ProductPage({
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <div className="grid items-start gap-10 md:grid-cols-2">
-        <div>
+        <div className="md:sticky md:top-24 md:self-start">
           <ProductGallery title={product.title} images={images} />
         </div>
 
@@ -148,29 +149,15 @@ export default async function ProductPage({
             </div>
           </div>
 
-          {product.description && <RichDescription text={product.description} />}
+          <ProductMeta
+            format={product.fileFormat ? product.fileFormat.toUpperCase() : "—"}
+            sizeLabel={size || "—"}
+            publishedAt={new Date(product.createdAt).toISOString()}
+            updatedAt={new Date(product.updatedAt).toISOString()}
+            downloads={downloads}
+          />
 
-          <ul className="grid grid-cols-2 gap-2 text-sm text-white/60">
-            {product.fileFormat && (
-              <li>
-                <Bi en="Format:" sv="Format:" /> {product.fileFormat.toUpperCase()}
-              </li>
-            )}
-            {size && (
-              <li>
-                <Bi en="File size:" sv="Filstorlek:" /> {size}
-              </li>
-            )}
-            <li>
-              <Bi en="Published:" sv="Publicerad:" /> {formatDate(product.createdAt)}
-            </li>
-            <li>
-              <Bi en="Last updated:" sv="Senast uppdaterad:" /> {formatDate(product.updatedAt)}
-            </li>
-            <li>
-              <Bi en="Downloads:" sv="Nedladdningar:" /> {downloads}
-            </li>
-          </ul>
+          {product.description && <RichDescription text={product.description} />}
 
           {faq.length > 0 && (
             <section className="space-y-2 pt-2">

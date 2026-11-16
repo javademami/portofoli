@@ -3,38 +3,22 @@
 import { useEffect, useState } from "react";
 
 export default function ProductGallery({
-  title,
   images,
+  title,
 }: {
-  title: string;
   images: string[];
+  title: string;
 }) {
   const [index, setIndex] = useState(0);
-  const [mounted, setMounted] = useState(false);
-  const [visible, setVisible] = useState(false);
-
-  const count = images.length;
-  const current = images[index];
-
-  const openModal = () => {
-    setMounted(true);
-    setTimeout(() => setVisible(true), 10);
-  };
-
-  const closeModal = () => {
-    setVisible(false);
-    setTimeout(() => setMounted(false), 250);
-  };
-
-  const next = () => setIndex((i) => (i + 1) % count);
-  const prev = () => setIndex((i) => (i - 1 + count) % count);
+  const [open, setOpen] = useState(false);
+  const total = images.length;
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeModal();
-      if (e.key === "ArrowRight") setIndex((i) => (i + 1) % count);
-      if (e.key === "ArrowLeft") setIndex((i) => (i - 1 + count) % count);
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "ArrowRight") setIndex((i) => (i + 1) % total);
+      if (e.key === "ArrowLeft") setIndex((i) => (i - 1 + total) % total);
     };
     window.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -42,98 +26,61 @@ export default function ProductGallery({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [mounted, count]);
+  }, [open, total]);
 
-  if (count === 0) return null;
+  if (total === 0) return null;
 
   return (
     <div className="space-y-3">
-      <button
-        type="button"
-        onClick={openModal}
-        className="block w-full cursor-zoom-in overflow-hidden rounded-2xl border border-white/10"
-      >
-        <img
-          src={current}
-          alt={`${title} ${index + 1}`}
-          className="aspect-square w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
-        />
-      </button>
-
-      {count > 1 && (
-        <div className="grid grid-cols-4 gap-2">
-          {images.map((src, i) => (
-            <button
-              key={`${src}-${i}`}
-              type="button"
-              onClick={() => setIndex(i)}
-              className={`overflow-hidden rounded-lg border transition-colors ${
-                i === index ? "border-amber-400" : "border-white/10"
-              }`}
-            >
-              <img src={src} alt={`${title} ${i + 1}`} loading="lazy" className="aspect-square w-full object-cover" />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {mounted && (
-        <div
-          onClick={closeModal}
-          className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 transition-opacity duration-200 ${
-            visible ? "opacity-100" : "opacity-0"
-          }`}
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#11141c]">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="block w-full cursor-zoom-in"
+          aria-label="Open image"
         >
           <img
-            src={current}
+            src={images[index]}
             alt={`${title} ${index + 1}`}
-            onClick={(e) => e.stopPropagation()}
-            className={`max-h-[90vh] max-w-[90vw] rounded-lg object-contain transition-all duration-300 ease-out ${
-              visible ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
+            className="aspect-[16/10] w-full object-contain"
           />
+        </button>
+      </div>
 
-          {count > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  prev();
-                }}
-                className={`absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-2 text-2xl text-white transition-all duration-300 hover:bg-white/20 ${
-                  visible ? "opacity-100" : "opacity-0"
-                }`}
-                aria-label="previous"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  next();
-                }}
-                className={`absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 px-4 py-2 text-2xl text-white transition-all duration-300 hover:bg-white/20 ${
-                  visible ? "opacity-100" : "opacity-0"
-                }`}
-                aria-label="next"
-              >
-                ›
-              </button>
-            </>
-          )}
+      <div className="grid grid-cols-5 gap-2">
+        {images.map((src, i) => (
+          <button
+            key={src + i}
+            type="button"
+            onClick={() => setIndex(i)}
+            className={`aspect-video overflow-hidden rounded-lg border ${
+              i === index ? "border-amber-500" : "border-white/10"
+            }`}
+          >
+            <img src={src} alt="" className="h-full w-full object-cover" />
+          </button>
+        ))}
+      </div>
 
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setOpen(false)}
+        >
           <button
             type="button"
-            onClick={closeModal}
-            className={`absolute right-4 top-4 rounded-full bg-white/10 px-3 py-1 text-white transition-opacity duration-300 hover:bg-white/20 ${
-              visible ? "opacity-100" : "opacity-0"
-            }`}
-            aria-label="close"
+            onClick={() => setOpen(false)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 px-3 py-1 text-white"
+            aria-label="Close"
           >
             ✕
           </button>
+          <img
+            src={images[index]}
+            alt={`${title} ${index + 1}`}
+            className="max-h-[90vh] max-w-[90vw] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
