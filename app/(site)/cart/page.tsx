@@ -1,193 +1,248 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLang } from "@/components/site/LanguageContext";
+import { clearCart, readCart, removeFromCart } from "@/lib/guestCart";
 
-type Item = { _id: string; title: string; slug: string; priceUsdt: number; coverImage: string };
-
-const T = {
-  en: {
-    title: "Your cart",
-    back: "Back to store",
-    empty: "Your cart is empty.",
-    browse: "Browse the store",
-    remove: "Remove",
-    total: "Total",
-    checkout: "Pay with USDT",
-    placing: "Creating order…",
-    signIn: "Sign in to view your cart.",
-    error: "Something went wrong. Please try again.",
-    conflict: "Some items are already owned or no longer available. Please review your cart.",
-    loading: "Loading…",
-    note: "Pay the exact USDT amount on TRON (TRC20) within 30 minutes.",
-    consent:
-      "I understand this is a digital product. Delivery starts immediately after payment, and I may lose my right of withdrawal once the file is available to me.",
-    terms: "Read the terms",
-  },
-  sv: {
-    title: "Din varukorg",
-    back: "Tillbaka till butiken",
-    empty: "Din varukorg är tom.",
-    browse: "Bläddra i butiken",
-    remove: "Ta bort",
-    total: "Totalt",
-    checkout: "Betala med USDT",
-    placing: "Skapar order…",
-    signIn: "Logga in för att se din varukorg.",
-    error: "Något gick fel. Försök igen.",
-    conflict: "Några produkter är redan köpta eller inte längre tillgängliga. Granska din varukorg.",
-    loading: "Laddar…",
-    note: "Betala exakt USDT-belopp på TRON (TRC20) inom 30 minuter.",
-    consent:
-      "Jag förstår att detta är en digital produkt. Leveransen startar direkt efter betalningen och jag kan förlora ångerrätten när filen är tillgänglig för mig.",
-    terms: "Läs villkoren",
-  },
-};
+type CartItem = { _id: string; title: string; slug: string; priceUsdt: number; coverImage?: string };
+type Applied = { code: string; percentOff: number };
 
 export default function CartPage() {
   const { lang } = useLang();
-  const t = T[lang];
+  const t = (en: string, sv: string) => (lang === "sv" ? sv : en);
   const router = useRouter();
 
-  const [items, setItems] = useState<Item[] | null>(null);
-  const [totalUsdt, setTotalUsdt] = useState(0);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/cart", { cache: "no-store" });
-      if (res.status === 401) {
-        setError(t.signIn);
-        setItems([]);
-        return;
-      }
-      if (!res.ok) {
-        setError(t.error);
-        return;
-      }
-      const d = await res.json();
-      setItems(d.items);
-      setTotalUsdt(d.totalUsdt);
-      setError("");
-    } catch {
-      setError(t.error);
-    }
-  }, [t]);
+  const [codeInput, setCodeInput] = useState("");
+  const [applied, setApplied] = useState<Applied | null>(null);
+  const [couponMsg, setCouponMsg] = useState<string | null>(null);
+  const [couponOk, setCouponOk] = useState(false);
+  const [couponBusy, setCouponBusy] = useState(false);
 
   useEffect(() => {
-    load();
-    window.addEventListener("cart-updated", load);
-    return () => window.removeEventListener("cart-updated", load);
-  }, [load]);
+    let cancelled = false;
+    const ids = readCart();
+    if (ids.length === 0) {
+      setLoading(false);
+      return;
+    }
+    fetch("/api/cart/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) setItems(d.items ?? []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  async function removeItem(id: string) {
-    await fetch(`/api/cart/${id}`, { method: "DELETE" });
-    window.dispatchEvent(new Event("cart-updated"));
+  const subtotal = items.reduce((s, i) => s + Number(i.priceUsdt || 0), 0);
+  const total = applied ? (subtotal * (100 - applied.percentOff)) / 100 : subtotal;
+
+  function removeItem(id: string) {
+    removeFromCart(id);
+    setItems((prev) => prev.filter((i) => i._id !== id));
+  }
+
+  async function applyCoupon() {
+    const code = codeInput.trim().toUpperCase();
+    if (!code) return;
+    setCouponBusy(true);
+    setCouponMsg(null);
+    try {
+      const res = await fetch(`/api/coupons/check?code=${encodeURIComponent(code)}`, { cache: "no-store" });
+      if (!res.ok) {
+        setApplied(null);
+        setCouponOk(false);
+        setCouponMsg(t("Invalid or expired code.", "Ogiltig eller utgången kod."));
+        return;
+      }
+      const data = (await res.json()) as Applied;
+      setApplied({ code: data.code, percentOff: data.percentOff });
+      setCouponOk(true);
+      setCouponMsg(t(`${data.percentOff}% discount applied.`, `${data.percentOff}% rabatt tillämpad.`));
+    } catch {
+      setCouponOk(false);
+      setCouponMsg(t("Could not check the code.", "Kunde inte kontrollera koden."));
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
+  function removeCoupon() {
+    setApplied(null);
+    setCouponMsg(null);
+    setCodeInput("");
   }
 
   async function checkout() {
-    if (!consent) return;
+    if (!consent || items.length === 0) return;
     setBusy(true);
-    setError("");
+    setError(null);
     try {
-      const res = await fetch("/api/crypto/orders", { method: "POST" });
-      if (res.status === 401) return setError(t.signIn);
-      if (res.status === 409) {
-        setError(t.conflict);
-        await load();
+      const res = await fetch("/api/crypto/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productIds: items.map((i) => i._id),
+          couponCode: applied?.code,
+        }),
+      });
+      if (res.status === 401) {
+        router.push(`/sign-in?redirect_url=${encodeURIComponent("/cart")}`);
         return;
       }
-      if (!res.ok) return setError(t.error);
-      const d = await res.json();
-      router.push(`/checkout/crypto/${d.id}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || t("Could not create the order.", "Kunde inte skapa beställningen."));
+        return;
+      }
+      clearCart();
+      router.push(`/checkout/crypto/${data.id}`);
     } catch {
-      setError(t.error);
+      setError(t("Network error. Please try again.", "Nätverksfel. Försök igen."));
     } finally {
       setBusy(false);
     }
   }
 
+  if (loading) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-16 text-white/60">
+        {t("Loading cart...", "Laddar varukorgen...")}
+      </main>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-16 text-center text-white">
+        <h1 className="mb-4 text-2xl font-bold">{t("Your cart is empty", "Varukorgen är tom")}</h1>
+        <Link href="/store" className="text-amber-400 underline">
+          {t("Back to store", "Tillbaka till butiken")}
+        </Link>
+      </main>
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 text-zinc-100">
-      <Link href="/store" className="text-sm text-zinc-400 hover:text-amber-300">
-        ← {t.back}
-      </Link>
-      <h1 className="mt-4 text-3xl font-semibold">{t.title}</h1>
+    <main className="mx-auto max-w-3xl space-y-8 px-4 py-10 text-white">
+      <h1 className="text-3xl font-bold">{t("Cart", "Varukorg")}</h1>
 
-      {error && <p className="mt-6 text-red-400">{error}</p>}
-      {!items && !error && <p className="mt-6 text-zinc-400">{t.loading}</p>}
-
-      {items && items.length === 0 && !error && (
-        <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-          <p className="text-zinc-400">{t.empty}</p>
-          <Link
-            href="/store"
-            className="mt-4 inline-flex rounded-full bg-amber-400 px-6 py-2.5 text-sm font-medium text-zinc-900 hover:bg-amber-300"
-          >
-            {t.browse}
-          </Link>
-        </div>
-      )}
-
-      {items && items.length > 0 && (
-        <>
-          <div className="mt-8 space-y-4">
-            {items.map((p) => (
-              <div key={p._id} className="flex items-center gap-4 rounded-3xl border border-white/10 bg-white/5 p-4">
-                {p.coverImage && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.coverImage} alt="" className="h-16 w-24 rounded-2xl object-cover" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <Link href={`/store/${p.slug}`} className="font-medium hover:text-amber-300">
-                    {p.title}
-                  </Link>
-                  <p className="mt-1 text-sm text-zinc-400">{p.priceUsdt.toFixed(2)} USDT</p>
-                </div>
-                <button type="button" onClick={() => removeItem(p._id)} className="text-sm text-zinc-400 hover:text-red-400">
-                  {t.remove}
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
-            <div className="flex items-center justify-between text-lg font-semibold">
-              <span>{t.total}</span>
-              <span>{totalUsdt.toFixed(2)} USDT</span>
+      <ul className="space-y-3">
+        {items.map((item) => (
+          <li key={item._id} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            {item.coverImage && (
+              <img src={item.coverImage} alt={item.title} className="h-16 w-16 rounded-lg object-cover" />
+            )}
+            <div className="flex-1">
+              <Link href={`/store/${item.slug}`} className="font-medium hover:underline">
+                {item.title}
+              </Link>
+              <div className="text-sm text-amber-400">{Number(item.priceUsdt).toFixed(2)} USDT</div>
             </div>
-            <p className="mt-2 text-xs text-zinc-500">{t.note}</p>
-
-            <label className="mt-5 flex cursor-pointer items-start gap-3 text-sm text-zinc-300">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-1 h-4 w-4 shrink-0 accent-amber-500"
-              />
-              <span>
-                {t.consent}{" "}
-                <Link href="/terms" className="text-amber-300 underline">
-                  {t.terms}
-                </Link>
-              </span>
-            </label>
-
             <button
               type="button"
-              onClick={checkout}
-              disabled={busy || !consent}
-              className="mt-5 w-full rounded-full bg-amber-400 px-6 py-3 text-sm font-medium text-zinc-900 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => removeItem(item._id)}
+              className="text-sm text-white/50 hover:text-red-400"
             >
-              {busy ? t.placing : t.checkout}
+              {t("Remove", "Ta bort")}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <section className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <h2 className="font-medium">{t("Discount code", "Rabattkod")}</h2>
+        {applied ? (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-emerald-400">
+              {applied.code} · {applied.percentOff}%
+            </span>
+            <button type="button" onClick={removeCoupon} className="text-sm text-white/50 hover:text-red-400">
+              {t("Remove", "Ta bort")}
             </button>
           </div>
-        </>
-      )}
-    </div>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              value={codeInput}
+              onChange={(e) => setCodeInput(e.target.value)}
+              placeholder={t("Enter code", "Ange kod")}
+              className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 uppercase outline-none focus:border-amber-400"
+            />
+            <button
+              type="button"
+              onClick={applyCoupon}
+              disabled={couponBusy || !codeInput.trim()}
+              className="rounded-lg bg-white/10 px-4 py-2 disabled:opacity-50"
+            >
+              {t("Apply", "Använd")}
+            </button>
+          </div>
+        )}
+        {couponMsg && (
+          <p className={`text-sm ${couponOk ? "text-emerald-400" : "text-red-400"}`}>{couponMsg}</p>
+        )}
+      </section>
+
+      <section className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex justify-between text-sm text-white/60">
+          <span>{t("Subtotal", "Delsumma")}</span>
+          <span>{subtotal.toFixed(2)} USDT</span>
+        </div>
+        {applied && (
+          <div className="flex justify-between text-sm text-emerald-400">
+            <span>{t("Discount", "Rabatt")}</span>
+            <span>-{applied.percentOff}%</span>
+          </div>
+        )}
+        <div className="flex justify-between text-lg font-semibold">
+          <span>{t("Total", "Totalt")}</span>
+          <span className="text-amber-400">{total.toFixed(2)} USDT</span>
+        </div>
+      </section>
+
+      <label className="flex items-start gap-3 text-sm text-white/70">
+        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1" />
+        <span>
+          {t("I accept the ", "Jag godkänner ")}
+          <Link href="/terms" className="underline">
+            {t("Terms of Sale", "villkoren")}
+          </Link>
+          {t(
+            " and understand that digital products are delivered immediately.",
+            " och förstår att digitala produkter levereras direkt."
+          )}
+        </span>
+      </label>
+
+      {error && <p className="text-sm text-red-400">{error}</p>}
+
+      <button
+        type="button"
+        onClick={checkout}
+        disabled={!consent || busy}
+        className="w-full rounded-full bg-amber-400 py-3 font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {busy ? t("Processing...", "Bearbetar...") : t("Pay with USDT", "Betala med USDT")}
+      </button>
+    </main>
   );
 }

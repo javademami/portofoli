@@ -1,98 +1,104 @@
-﻿import Link from "next/link";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { connectDB } from "@/lib/mongodb";
+import { Collection } from "@/models/Collection";
 import { Product } from "@/models/Product";
 import Bi from "@/components/site/Bi";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Store",
-  description: "Digital products: templates, scripts and files ready to download.",
-  alternates: { canonical: "/store" },
-};
+export const metadata: Metadata = { title: "Store" };
 
 function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-type Props = { searchParams: Promise<{ q?: string }> };
-
-export default async function StorePage({ searchParams }: Props) {
+export default async function StorePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const { q = "" } = await searchParams;
-  const term = q.trim().slice(0, 100);
+  const query = q.trim().slice(0, 100);
 
   await connectDB();
+  const collections = await Collection.find({ parent: null, published: true })
+    .sort({ order: 1, name: 1 })
+    .lean();
+
   const filter: Record<string, unknown> = { published: true, priceUsdt: { $gt: 0 } };
-  if (term) {
-    const rx = new RegExp(escapeRegex(term), "i");
+  if (query) {
+    const rx = new RegExp(escapeRegex(query), "i");
     filter.$or = [{ title: rx }, { description: rx }];
   }
-
   const products = await Product.find(filter)
-    .select("title slug description priceUsdt coverImage")
+    .select("title slug priceUsdt coverImage")
     .sort({ createdAt: -1 })
     .lean();
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-12 text-zinc-100">
-      <h1 className="text-3xl font-semibold">
-        <Bi en="Store" sv="Butik" />
-      </h1>
-      <p className="mt-2 text-zinc-400">
-        <Bi
-          en="Digital products, ready to download after payment."
-          sv="Digitala produkter, redo att laddas ner efter betalning."
-        />
-      </p>
+    <main className="mx-auto max-w-6xl space-y-8 px-4 py-10 text-white">
+      <header className="space-y-4">
+        <h1 className="text-3xl font-bold">
+          <Bi en="Store" sv="Butik" />
+        </h1>
 
-      <form method="get" className="mt-6 flex max-w-md items-center gap-3">
-        <input
-          name="q"
-          defaultValue={term}
-          className="flex-1 rounded-full border border-white/15 bg-black/30 px-5 py-2.5 text-sm text-white outline-none focus:border-amber-400"
-        />
-        <button
-          type="submit"
-          className="rounded-full bg-amber-400 px-5 py-2.5 text-sm font-medium text-zinc-900 hover:bg-amber-300"
-        >
-          <Bi en="Search" sv="Sök" />
-        </button>
-      </form>
+        <form action="/store" className="flex gap-2">
+          <input
+            name="q"
+            defaultValue={query}
+            placeholder="Search"
+            className="flex-1 rounded-full border border-white/10 bg-black/40 px-4 py-2 outline-none focus:border-amber-400"
+          />
+          <button type="submit" className="rounded-full bg-amber-400 px-5 py-2 font-medium text-black">
+            <Bi en="Search" sv="Sök" />
+          </button>
+        </form>
 
-      {products.length === 0 && (
-        <p className="mt-10 text-zinc-500">
-          {term ? (
-            <Bi en="No products match your search." sv="Inga produkter matchar din sökning." />
-          ) : (
-            <Bi en="No products yet." sv="Inga produkter ännu." />
-          )}
+        {collections.length > 0 && (
+          <nav className="flex flex-wrap gap-2">
+            <Link
+              href="/store"
+              className="rounded-full border border-white/15 px-4 py-1.5 text-sm hover:border-amber-400/60"
+            >
+              <Bi en="All" sv="Alla" />
+            </Link>
+            {collections.map((c) => (
+              <Link
+                key={String(c._id)}
+                href={`/store/collection/${c.slug}`}
+                className="rounded-full border border-white/15 px-4 py-1.5 text-sm hover:border-amber-400/60"
+              >
+                {c.name}
+              </Link>
+            ))}
+          </nav>
+        )}
+      </header>
+
+      {products.length === 0 ? (
+        <p className="text-white/50">
+          <Bi en="No products found." sv="Inga produkter hittades." />
         </p>
-      )}
-
-      <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {products.map((p) => (
-          <Link
-            key={String(p._id)}
-            href={`/store/${p.slug}`}
-            className="group overflow-hidden rounded-3xl border border-white/10 bg-white/5 transition hover:border-amber-400/40"
-          >
-            {p.coverImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={p.coverImage} alt={p.title} className="h-48 w-full object-cover" />
-            ) : (
-              <div className="flex h-48 items-center justify-center bg-white/5 text-zinc-600">
-                <Bi en="No cover" sv="Ingen bild" />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {products.map((p) => (
+            <Link
+              key={String(p._id)}
+              href={`/store/${p.slug}`}
+              className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] hover:border-amber-400/50"
+            >
+              {p.coverImage && (
+                <img src={p.coverImage} alt={p.title} className="aspect-video w-full object-cover" />
+              )}
+              <div className="space-y-1 p-4">
+                <div className="font-medium">{p.title}</div>
+                <div className="text-amber-400">{Number(p.priceUsdt).toFixed(2)} USDT</div>
               </div>
-            )}
-            <div className="p-6">
-              <h2 className="text-lg font-medium group-hover:text-amber-300">{p.title}</h2>
-              {p.description && <p className="mt-2 line-clamp-2 text-sm text-zinc-400">{p.description}</p>}
-              <p className="mt-4 text-lg font-semibold text-amber-400">{p.priceUsdt.toFixed(2)} USDT</p>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </main>
   );
 }
