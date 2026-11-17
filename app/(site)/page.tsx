@@ -1,5 +1,6 @@
 "use client";
 
+import FeaturedProducts from "@/components/site/FeaturedProducts";
 import ClientEffects from "@/components/ClientEffects";
 import { useLang } from "@/components/site/LanguageContext";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -578,7 +579,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Experience and reviews */}
+      <FeaturedProducts />
+
+  {/* Experience and reviews */}
       <section className="py-24 bg-zinc-50 border-t border-zinc-100" id="experience">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-16">
