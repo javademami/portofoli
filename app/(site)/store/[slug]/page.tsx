@@ -110,11 +110,7 @@ export default async function ProductPage({
     <main className="mx-auto max-w-6xl px-4 py-10 text-white">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <div className="grid items-start gap-10 md:grid-cols-2">
-        <div className="md:sticky md:top-24 md:self-start">
-          <ProductGallery title={product.title} images={images} />
-        </div>
-
+      <div className="grid items-start gap-10 md:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
         <div className="space-y-6">
           <h1 className="text-3xl font-bold">{product.title}</h1>
 
@@ -172,6 +168,10 @@ export default async function ProductPage({
               ))}
             </section>
           )}
+        </div>
+
+        <div className="md:sticky md:top-24 md:self-start">
+          <ProductGallery title={product.title} images={images} />
         </div>
       </div>
 

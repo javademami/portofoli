@@ -58,75 +58,74 @@ export default function RichDescription({ text }: { text: string }) {
   const blocks = parse(text);
 
   return (
-    <div className="space-y-5">
+    <div
+      className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 transition duration-300 hover:border-amber-400/30 sm:p-8"
+      style={{ animation: "rd-reveal 500ms ease-out backwards" }}
+    >
       <style>{styles}</style>
-      {blocks.map((block, i) => {
-        if (block.kind === "image") {
-          return (
-            <img
-              key={i}
-              src={block.src}
-              alt={block.alt}
-              className="w-full rounded-2xl border border-white/10 transition duration-300 hover:border-amber-400/40"
-            />
-          );
-        }
 
-        if (block.kind === "video") {
-          const embed = embedUrl(block.src);
-          if (embed) {
+      <div className="space-y-8">
+        {blocks.map((block, i) => {
+          if (block.kind === "image") {
             return (
-              <div key={i} className="aspect-video overflow-hidden rounded-2xl border border-white/10">
-                <iframe
-                  src={embed}
-                  className="h-full w-full"
-                  allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
-                  allowFullScreen
-                  title="Product video"
-                />
-              </div>
+              <img
+                key={i}
+                src={block.src}
+                alt={block.alt}
+                className="w-full rounded-xl border border-white/10"
+              />
             );
           }
-          return (
-            <video
-              key={i}
-              src={block.src}
-              controls
-              className="w-full rounded-2xl border border-white/10"
-            />
-          );
-        }
 
-        const [title, ...rest] = block.lines;
-        return (
-          <section
-            key={i}
-            className="rd-card rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition duration-300 hover:-translate-y-0.5 hover:border-amber-400/30"
-            style={{
-              animation: "rd-reveal 500ms ease-out backwards",
-              animationDelay: `${i * 80}ms`,
-            }}
-          >
-            <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {rest.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {rest.map((line, j) =>
-                  line.length <= 70 ? (
-                    <div key={j} className="flex items-start gap-2 text-sm text-white/75">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
-                      <span>{line}</span>
-                    </div>
-                  ) : (
-                    <p key={j} className="text-sm leading-relaxed text-white/65">
-                      {line}
-                    </p>
-                  )
-                )}
-              </div>
-            )}
-          </section>
-        );
-      })}
+          if (block.kind === "video") {
+            const embed = embedUrl(block.src);
+            if (embed) {
+              return (
+                <div key={i} className="aspect-video overflow-hidden rounded-xl border border-white/10">
+                  <iframe
+                    src={embed}
+                    className="h-full w-full"
+                    allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                    title="Product video"
+                  />
+                </div>
+              );
+            }
+            return (
+              <video
+                key={i}
+                src={block.src}
+                controls
+                className="w-full rounded-xl border border-white/10"
+              />
+            );
+          }
+
+          const [title, ...rest] = block.lines;
+          return (
+            <div key={i} className="space-y-3">
+              <h3 className="text-xl font-semibold leading-snug text-white">{title}</h3>
+              {rest.length > 0 && (
+                <div className="space-y-2">
+                  {rest.map((line, j) =>
+                    line.length <= 70 ? (
+                      <div key={j} className="flex items-start gap-2 text-sm text-white/75">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                        <span>{line}</span>
+                      </div>
+                    ) : (
+                      <p key={j} className="text-sm leading-relaxed text-white/65">
+                        {line}
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
